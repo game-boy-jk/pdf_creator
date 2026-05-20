@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
@@ -16,16 +18,18 @@ logging.basicConfig(
 )
 log = logging.getLogger("pdf_creator")
 
-app = FastAPI(title="PDF Creator")
-
 cfg = get_settings()
 storage = FileStorage(cfg)
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     storage.ensure_bucket()
     log.info("minio_bucket_ready bucket=%s", cfg.minio_bucket)
+    yield
+
+
+app = FastAPI(title="PDF Creator", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -52,7 +56,3 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     except StorageError as exc:
         log.exception("storage_failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    except Exception as exc:
-        log.exception("generate_failed")
-        raise HTTPException(status_code=500, detail="Internal server error") from exc

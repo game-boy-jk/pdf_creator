@@ -51,7 +51,7 @@ def fill_pdf(
 
     try:
         document = fitz.open(stream=src, filetype="pdf")
-    except Exception as exc:
+    except (fitz.EmptyFileError, fitz.FileDataError) as exc:
         raise PdfFillError(f"Failed to open PDF template: {exc}") from exc
 
     temp_fonts: list[str] = []
@@ -73,11 +73,6 @@ def fill_pdf(
                 _insert_value(page, item)
 
         return document.tobytes(garbage=4, deflate=True)
-
-    except PdfFillError:
-        raise
-    except Exception as exc:
-        raise PdfFillError(f"Failed to fill PDF template: {exc}") from exc
     finally:
         document.close()
         for path in temp_fonts:
@@ -264,7 +259,7 @@ def _target_rect(
     line_height = max(font_size * LINE_HEIGHT_FACTOR, marker_rect.height)
     same_line = _same_line(page_text, marker_rect)
 
-    if same_line and same_line.x1 > marker_rect.x1 + font_size * 1:
+    if same_line and same_line.x1 > marker_rect.x1 + font_size:
         return fitz.Rect(
             marker_rect.x0,
             marker_rect.y0,

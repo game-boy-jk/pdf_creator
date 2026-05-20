@@ -4,7 +4,6 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
@@ -77,7 +76,7 @@ def _load_config_server() -> dict[str, Any]:
     try:
         payload = _request_config(client)
         return _parse_config_payload(payload)
-    except (OSError, URLError, json.JSONDecodeError, ValueError) as exc:
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         if client.fail_fast:
             raise RuntimeError("Cannot load configuration from config server") from exc
         return {}
