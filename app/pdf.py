@@ -44,10 +44,12 @@ def fill_pdf(
     src: bytes,
     data: dict[str, str],
     *,
+    replace: dict[str, str] | None = None,
     fallback_font: FontResolver | None = None,
 ) -> bytes:
-    if not data:
-        raise PdfFillError("data must not be empty")
+    replace = replace or {}
+    if not data and not replace:
+        raise PdfFillError("data or replace must not be empty")
 
     try:
         document = fitz.open(stream=src, filetype="pdf")
@@ -57,10 +59,35 @@ def fill_pdf(
     temp_fonts: list[str] = []
 
     try:
-        replacements = _collect_replacements(document, data, fallback_font, temp_fonts)
+        replacements: dict[int, list[Replacement]] = {}
+        font_cache: FontCache = {}
+
+        if data:
+            _merge_replacements(
+                replacements,
+                _collect_placeholder_replacements(
+                    document,
+                    data,
+                    fallback_font,
+                    temp_fonts,
+                    font_cache,
+                ),
+            )
+
+        if replace:
+            _merge_replacements(
+                replacements,
+                _collect_text_replacements(
+                    document,
+                    replace,
+                    fallback_font,
+                    temp_fonts,
+                    font_cache,
+                ),
+            )
 
         if not replacements:
-            raise PdfFillError("PDF template has no placeholders matching request data")
+            raise PdfFillError("PDF template has no matching text")
 
         for page_number, page_replacements in replacements.items():
             page = document[page_number]
@@ -82,17 +109,17 @@ def fill_pdf(
                 pass
 
 
-def _collect_replacements(
+def _collect_placeholder_replacements(
     document: fitz.Document,
     data: dict[str, str],
     fallback_font: FontResolver | None,
     temp_fonts: list[str],
+    font_cache: FontCache,
 ) -> dict[int, list[Replacement]]:
     result: dict[int, list[Replacement]] = {}
     found_keys: set[str] = set()
     missing_keys: set[str] = set()
     has_placeholders = False
-    font_cache: FontCache = {}
 
     for page_number, page in enumerate(document):
         text = page.get_text("text")
@@ -147,6 +174,78 @@ def _collect_replacements(
         raise PdfFillError(f"Unknown PDF placeholders: {names}")
 
     return result
+
+
+def _collect_text_replacements(
+    document: fitz.Document,
+    replace: dict[str, str],
+    fallback_font: FontResolver | None,
+    temp_fonts: list[str],
+    font_cache: FontCache,
+) -> dict[int, list[Replacement]]:
+    result: dict[int, list[Replacement]] = {}
+    missing: set[str] = set(replace)
+
+    for page_number, page in enumerate(document):
+        page_text = page.get_text("dict")
+
+        for old_text, new_text in replace.items():
+            line_replacements = _line_replacements(page_text, old_text, str(new_text))
+            if not line_replacements:
+                continue
+
+            missing.discard(old_text)
+            for rect, value in line_replacements:
+                style = _style_for_rect(page_text, rect)
+                font_file = _font_file_for_style(
+                    document,
+                    page,
+                    style,
+                    fallback_font,
+                    temp_fonts,
+                    font_cache,
+                )
+                result.setdefault(page_number, []).append(
+                    Replacement(
+                        key=old_text,
+                        value=value,
+                        rect=rect,
+                        target_rect=_line_target_rect(page, rect, style.font_size),
+                        style=style,
+                        font_file=font_file,
+                    )
+                )
+
+    if missing:
+        names = ", ".join(sorted(missing))
+        raise PdfFillError(f"Text to replace not found in PDF: {names}")
+
+    return result
+
+
+def _line_replacements(
+    page_text: dict[str, Any],
+    old_text: str,
+    new_text: str,
+) -> list[tuple[fitz.Rect, str]]:
+    result: list[tuple[fitz.Rect, str]] = []
+
+    for block in page_text.get("blocks", []):
+        for line in block.get("lines", []):
+            text = _line_text(line)
+            if old_text not in text:
+                continue
+            result.append((fitz.Rect(line["bbox"]), text.replace(old_text, new_text)))
+
+    return result
+
+
+def _merge_replacements(
+    target: dict[int, list[Replacement]],
+    source: dict[int, list[Replacement]],
+) -> None:
+    for page_number, items in source.items():
+        target.setdefault(page_number, []).extend(items)
 
 
 def _style_for_rect(page_text: dict[str, Any], rect: fitz.Rect) -> TextStyle:
@@ -205,13 +304,22 @@ def _font_file_for_style(
 
 
 def _embedded_font(document: fitz.Document, page: fitz.Page, span_font: str) -> bytes | None:
+    embedded_fonts: list[bytes] = []
+
     for font in page.get_fonts(full=True):
         xref = int(font[0])
         base_font = str(font[3])
+        extracted = document.extract_font(xref)
+        font_bytes = extracted[3] or None
+        if font_bytes:
+            embedded_fonts.append(font_bytes)
+
         if base_font == span_font or base_font.endswith(f"+{span_font}") or base_font.endswith(span_font):
-            extracted = document.extract_font(xref)
-            font_bytes = extracted[3]
-            return font_bytes or None
+            return font_bytes
+
+    if len(embedded_fonts) == 1:
+        return embedded_fonts[0]
+
     return None
 
 
@@ -277,6 +385,16 @@ def _target_rect(
         marker_rect.y0,
         max(marker_rect.x1, page.rect.x1 - DEFAULT_MARGIN),
         min(page.rect.y1 - DEFAULT_MARGIN, max_y),
+    )
+
+
+def _line_target_rect(page: fitz.Page, line_rect: fitz.Rect, font_size: float) -> fitz.Rect:
+    line_height = max(font_size * 1.8, line_rect.height)
+    return fitz.Rect(
+        line_rect.x0,
+        line_rect.y0,
+        page.rect.x1 - DEFAULT_MARGIN,
+        line_rect.y0 + line_height,
     )
 
 

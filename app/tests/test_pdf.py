@@ -26,6 +26,14 @@ def make_pdf_without_placeholders() -> bytes:
     return doc.tobytes()
 
 
+def make_pdf_with_regular_text() -> bytes:
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 90), "Hello Andrey", fontsize=12)
+    page.insert_text((50, 120), "Andrey signed the contract", fontsize=12)
+    return doc.tobytes()
+
+
 def extract_text(payload: bytes) -> str:
     doc = fitz.open(stream=payload, filetype="pdf")
     return "\n".join(page.get_text() for page in doc)
@@ -58,6 +66,24 @@ def test_fill_pdf_replaces_all_occurrences() -> None:
 
     text = extract_text(res)
     assert text.count("A") >= 2
+
+
+def test_fill_pdf_replaces_regular_text() -> None:
+    src = make_pdf_with_regular_text()
+
+    res = fill_pdf(src, {}, replace={"Andrey": "Evgeny"})
+
+    text = extract_text(res)
+    assert "Andrey" not in text
+    assert "Evgeny signed the contract" in text
+    assert text.count("Evgeny") == 2
+
+
+def test_fill_pdf_regular_text_not_found() -> None:
+    src = make_pdf_with_regular_text()
+
+    with pytest.raises(PdfFillError, match="Text to replace not found in PDF: Ivan"):
+        fill_pdf(src, {}, replace={"Ivan": "Evgeny"})
 
 
 def test_fill_pdf_without_matching_placeholders() -> None:

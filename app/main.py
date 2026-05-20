@@ -44,7 +44,12 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         log.info("generate_pdf template=%s output=%s", req.template_id, output_id)
 
         template = storage.read_bytes(req.template_id)
-        pdf = fill_pdf(template, req.data, fallback_font=storage.read_font_bytes)
+        pdf = fill_pdf(
+            template,
+            req.data,
+            replace=req.replace,
+            fallback_font=storage.read_font_bytes,
+        )
         storage.write_bytes(output_id, pdf)
 
         return GenerateResponse(file_id=output_id, file_url=storage.url(output_id))
