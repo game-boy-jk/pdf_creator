@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local generated files
+templates/
+generated/
+*.pdf
+
+# MinIO / Docker local data
+minio_data/
+data/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# MyPy / Ruff / cache
+.mypy_cache/
+.ruff_cache/
+.cache/

@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Tests and local tooling
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# IDE
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local generated files
+generated/
+*.pdf
+!templates/invoice.pdf
+
+# Docker / MinIO local data
+minio_data/
+data/
+
+# Docs not needed in image
+README.md
+*.md
+
+# Logs
+*.log
+logs/
