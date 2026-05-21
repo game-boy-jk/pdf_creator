@@ -143,3 +143,23 @@ def test_fill_pdf_reports_value_that_cannot_fit() -> None:
 def test_fill_pdf_broken_pdf() -> None:
     with pytest.raises(PdfFillError, match="Failed to open PDF template"):
         fill_pdf(b"not a pdf", {"customer_name": "OOO Romashka"})
+
+
+def test_fill_pdf_data_and_replace_together() -> None:
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 90), "Customer: {{customer_name}}", fontsize=12)
+    page.insert_text((50, 120), "Hello Andrey", fontsize=12)
+    src = doc.tobytes()
+
+    res = fill_pdf(
+        src,
+        data={"customer_name": "OOO Romashka"},
+        replace={"Andrey": "Evgeny"},
+    )
+
+    text = extract_text(res)
+    assert "{{customer_name}}" not in text
+    assert "OOO Romashka" in text
+    assert "Andrey" not in text
+    assert "Evgeny" in text
