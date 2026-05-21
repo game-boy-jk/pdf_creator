@@ -2,7 +2,34 @@ import fitz
 import pytest
 
 from app.pdf import PdfFillError, fill_pdf
+from pathlib import Path
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
+def test_fill_real_word_exported_pdf() -> None:
+    src = (FIXTURES / "contract.pdf").read_bytes()
+    font = (FIXTURES / "arial.ttf").read_bytes()
+
+    res = fill_pdf(
+        src,
+        {
+            "customer_name": "OOO Romashka",
+            "date": "2026-05-21",
+            "total_sum": "12500.00 RUB",
+        },
+        fallback_font=lambda: font,
+    )
+
+    # Проверяем что placeholder'ы убраны из PDF
+    result_doc = fitz.open(stream=res, filetype="pdf")
+    for page in result_doc:
+        # search_for работает надёжнее get_text для кастомных шрифтов
+        assert not page.search_for("{{customer_name}}")
+        assert not page.search_for("{{date}}")
+        assert not page.search_for("{{total_sum}}")
+
+    # И что PDF валидный
+    assert res.startswith(b"%PDF")
 
 def make_pdf_with_placeholders() -> bytes:
     doc = fitz.open()
