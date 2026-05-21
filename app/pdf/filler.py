@@ -23,8 +23,7 @@ FontLoader = Callable[[], bytes | None]
 
 
 class PdfFillError(Exception):
-    """Исключение для ошибок заполнения PDF."""
-    pass
+    """Ошибка при заполнении PDF-шаблона данными."""
 
 
 @dataclass(frozen=True)

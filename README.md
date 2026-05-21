@@ -1,24 +1,29 @@
 # PDF Creator
 
-FastAPI-сервис для заполнения PDF-шаблонов и сохранения готовых PDF в S3/MinIO.
+FastAPI-сервис для заполнения PDF-шаблонов и сохранения результата в S3/MinIO.
 
-Шаблоны - это обычные PDF-файлы, экспортированные из Word, LibreOffice и других редакторов. Сервис не создает шаблоны в коде: нужные поля надо заранее поставить прямо в тексте документа.
+Шаблоны — обычные PDF из Word или LibreOffice. Поля подстановки расставляются прямо в тексте документа.
 
-Пример шаблона:
+## Структура проекта
 
-```text
-Contract with {{customer_name}}
-Date: {{date}}
-Total: {{total_sum}}
+```
+app/
+├── main.py        # FastAPI: роуты /health и /generate
+├── config.py      # настройки из env или Spring Cloud Config
+├── storage.py     # чтение/запись файлов в MinIO
+├── schemas.py     # Pydantic-модели запроса и ответа
+└── pdf/
+    ├── __init__.py
+    ├── filler.py  # основная логика: поиск и замена текста в PDF
+    ├── fonts.py   # загрузка и кеширование шрифтов
+    └── layout.py  # вычисление координат и стилей текста
 ```
 
 ## API
 
 `POST /generate`
 
-### Заполнение placeholder-ов
-
-Для новых шаблонов лучше использовать поля вида `{{name}}`, `{{date}}`, `{{total_sum}}`.
+### Placeholder-ы
 
 ```json
 {
@@ -31,50 +36,22 @@ Total: {{total_sum}}
 }
 ```
 
-Сервис найдет в PDF:
-
-```text
-{{customer_name}}
-{{date}}
-{{total_sum}}
-```
-
-и подставит значения из `data`.
+Сервис найдёт в PDF `{{customer_name}}`, `{{date}}`, `{{total_sum}}` и подставит значения.
 
 ### Замена обычного текста
 
-Для старых PDF без placeholder-ов можно использовать `replace`.
-
-Пример: в PDF уже есть текст `Андрей`, его нужно заменить на `Евгений`.
-
-```json
-{
-  "template_id": "templates/replace-greeting.pdf",
-  "replace": {
-    "Андрей": "Евгений"
-  }
-}
-```
-
-Если слово встречается несколько раз, сервис заменит все найденные вхождения в текстовом слое PDF.
-
-`data` и `replace` можно использовать вместе:
+Для PDF без placeholder-ов:
 
 ```json
 {
   "template_id": "templates/contract.pdf",
-  "data": {
-    "customer_name": "OOO Romashka",
-    "date": "2026-05-20",
-    "total_sum": "12 500.00 RUB"
-  },
   "replace": {
     "Андрей": "Евгений"
   }
 }
 ```
 
-Для новых шаблонов предпочтительнее `data` с placeholder-ами. `replace` полезен для старых или уже готовых PDF, где нельзя быстро расставить `{{...}}`.
+Заменяет все вхождения. `data` и `replace` можно комбинировать.
 
 ### Ответ
 
@@ -84,8 +61,6 @@ Total: {{total_sum}}
   "file_url": "http://localhost:9000/pdf-files/generated/<uuid>.pdf"
 }
 ```
-
-`file_id` генерируется сервисом.
 
 ## Конфигурация
 
@@ -99,13 +74,17 @@ MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=pdf-files
 ```
 
-Необязательные переменные:
+Необязательные:
 
 ```env
 MINIO_SECURE=false
 OUTPUT_PREFIX=generated/
 CACHE_TTL_SEC=300
+
+# TTF/OTF шрифт в том же bucket — нужен для кириллицы и subset-шрифтов
 PDF_FONT_OBJECT_KEY=fonts/arial.ttf
+
+# Spring Cloud Config (если используется)
 CONFIG_SERVER_URL=http://config-server:8888
 CONFIG_APP_NAME=pdf-creator
 CONFIG_PROFILE=default
@@ -113,20 +92,14 @@ CONFIG_LABEL=main
 CONFIG_FAIL_FAST=false
 ```
 
-`PDF_FONT_OBJECT_KEY` должен указывать на TTF/OTF-шрифт в том же bucket. Это важно, если шаблоны используют subset-шрифты или в PDF нужно вставлять кириллицу.
-
 ## Запуск
 
-Локально:
-
 ```bash
+# Локально
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
 
-Через Docker:
-
-```bash
+# Docker
 docker compose up --build
 ```
 

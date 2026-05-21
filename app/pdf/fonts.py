@@ -11,7 +11,6 @@ BUILTIN_FONTS = {"helv", "Helvetica", "Times-Roman", "Courier", "arial-narrow"}
 _cache_lock = Lock()
 
 FontLoader = Callable[[], bytes | None]
-
 # Кеш живёт на уровне процесса: ключ — имя шрифта в PDF,
 # значение — путь к temp-файлу или None если шрифт не нашли
 _font_path_cache: dict[str, str | None] = {}

@@ -13,9 +13,9 @@ def test_fill_real_word_exported_pdf() -> None:
     res = fill_pdf(
         src,
         {
-            "customer_name": "OOO Romashka",
+            "customer_name": "ООО Ромашка",
             "date": "2026-05-21",
-            "total_sum": "12500.00 RUB",
+            "total_sum": "12500.00 руб",
         },
         fallback_font=lambda: font,
     )
