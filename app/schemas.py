@@ -1,23 +1,16 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class GenerateRequest(BaseModel):
     template_id: str = Field(min_length=1)
-    data: dict[str, str] = Field(default_factory=dict)
-    replace: dict[str, str] = Field(default_factory=dict)
+    data: dict[str, str] = Field(min_length=1)  # min_length=1 заменяет model_validator
 
-    @field_validator("data", "replace")
+    @field_validator("data")
     @classmethod
-    def validate_pairs(cls, val: dict[str, str]) -> dict[str, str]:
+    def validate_keys(cls, val: dict[str, str]) -> dict[str, str]:
         if any(not key.strip() for key in val):
             raise ValueError("keys must not be empty")
         return val
-
-    @model_validator(mode="after")
-    def validate_payload(self) -> "GenerateRequest":
-        if not self.data and not self.replace:
-            raise ValueError("data or replace must not be empty")
-        return self
 
 
 class GenerateResponse(BaseModel):

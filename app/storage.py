@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import time
 from io import BytesIO
@@ -19,8 +17,7 @@ class StorageError(RuntimeError):
 class FileStorage:
     def __init__(self, cfg: Settings) -> None:
         self.bucket = cfg.minio_bucket
-        self.public_endpoint = cfg.minio_public_endpoint
-        self.secure = cfg.minio_secure
+        self.public_endpoint = self._normalize_endpoint(cfg.minio_public_endpoint)
         self.output_prefix = cfg.output_prefix
         self.font_key = cfg.pdf_font_object_key
         self.cache_ttl_sec = cfg.cache_ttl_sec
@@ -38,10 +35,10 @@ class FileStorage:
     def ensure_bucket(self) -> None:
         try:
             if not self.client.bucket_exists(self.bucket):
-                self.client.make_bucket(self.bucket)
+                raise StorageError(f"Bucket does not exist: {self.bucket}")
             self.client.set_bucket_policy(self.bucket, self._public_read_policy())
         except S3Error as exc:
-            raise StorageError(f"Cannot ensure MinIO bucket: {self.bucket}") from exc
+            raise StorageError(f"Cannot connect to MinIO bucket: {self.bucket}") from exc
 
     def read_bytes(self, key: str) -> bytes:
         cached = self._cached(key)
@@ -72,18 +69,11 @@ class FileStorage:
         except S3Error as exc:
             raise StorageError(f"Cannot write object to MinIO: {key}") from exc
 
-    def read_font_bytes(self) -> bytes | None:
-        if not self.font_key:
-            return None
+    def read_font_bytes(self) -> bytes:
         return self.read_bytes(self.font_key)
 
     def url(self, key: str) -> str:
-        endpoint = self.public_endpoint.rstrip("/")
-        if not endpoint.startswith(("http://", "https://")):
-            scheme = "https" if self.secure else "http"
-            endpoint = f"{scheme}://{endpoint}"
-
-        return f"{endpoint}/{quote(self.bucket)}/{quote(key)}"
+        return f"{self.public_endpoint}/{quote(self.bucket)}/{quote(key)}"
 
     def _cached(self, key: str) -> bytes | None:
         if self.cache_ttl_sec <= 0:
@@ -107,18 +97,23 @@ class FileStorage:
         with self._cache_lock:
             self._cache[key] = (time.monotonic() + self.cache_ttl_sec, payload)
 
+    @staticmethod
+    def _normalize_endpoint(endpoint: str) -> str:
+        endpoint = endpoint.rstrip("/")
+        if not endpoint.startswith(("http://", "https://")):
+            return f"http://{endpoint}"
+        return endpoint
+
     def _public_read_policy(self) -> str:
         resource = f"arn:aws:s3:::{self.bucket}/{self.output_prefix}*"
-        return json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"AWS": ["*"]},
-                        "Action": ["s3:GetObject"],
-                        "Resource": [resource],
-                    }
-                ],
-            }
-        )
+        return json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [resource],
+                }
+            ],
+        })

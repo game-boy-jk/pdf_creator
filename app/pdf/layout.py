@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any
 
 import fitz
 
+# говно
 DEFAULT_MARGIN = 36  # отступ от края страницы в pt
 LINE_HEIGHT_FACTOR = 1.15  # запас по высоте строки относительно font_size
-MIN_FONT_SIZE = 10.0
+MIN_FONT_SIZE = 6.0
 
 
 @dataclass(frozen=True)
@@ -31,6 +30,7 @@ def style_at_rect(page_text: dict[str, Any], rect: fitz.Rect) -> TextStyle:
                     best_span = span
 
     if not best_span:
+        # говно
         return TextStyle(font="helv", font_size=11.0, color=(0.0, 0.0, 0.0))
 
     return TextStyle(
@@ -39,7 +39,7 @@ def style_at_rect(page_text: dict[str, Any], rect: fitz.Rect) -> TextStyle:
         color=_color_from_int(int(best_span.get("color") or 0)),
     )
 
-
+# изменить
 def placeholder_target_rect(
     page: fitz.Page,
     page_text: dict[str, Any],
@@ -77,20 +77,6 @@ def placeholder_target_rect(
         marker_rect.y0,
         page.rect.x1 - DEFAULT_MARGIN,
         bottom,
-    )
-
-
-def line_target_rect(page: fitz.Page, line_rect: fitz.Rect, font_size: float) -> fitz.Rect:
-    """
-    Rect для замены целой строки (режим replace).
-    Высота 1.8 * font_size — берём с запасом, чтобы descender'ы не обрезались.
-    """
-    height = max(font_size * 1.8, line_rect.height)
-    return fitz.Rect(
-        line_rect.x0,
-        line_rect.y0,
-        page.rect.x1 - DEFAULT_MARGIN,
-        line_rect.y0 + height,
     )
 
 
