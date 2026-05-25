@@ -29,6 +29,7 @@ class _Replacement:
     value: str
     erase_rect: fitz.Rect
     insert_rect: fitz.Rect
+    style: TextStyle
     font_path: str
 
 
