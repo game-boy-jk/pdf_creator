@@ -3,17 +3,25 @@ from typing import Any
 
 import fitz
 
-# говно
-DEFAULT_MARGIN = 36  # отступ от края страницы в pt
+PAGE_MARGIN_PT = 36  # отступ от края страницы в pt
 LINE_HEIGHT_FACTOR = 1.15  # запас по высоте строки относительно font_size
 MIN_FONT_SIZE = 6.0
+MAX_INSERT_LINES = 4
+DEFAULT_FONT_SIZE = 11.0
+DEFAULT_TEXT_COLOR = (0.0, 0.0, 0.0)
+DEFAULT_TEXT_COLOR_VALUE = 0
 
 
 @dataclass(frozen=True)
 class TextStyle:
-    font: str
     font_size: float
     color: tuple[float, float, float]
+
+
+DEFAULT_TEXT_STYLE = TextStyle(
+    font_size=DEFAULT_FONT_SIZE,
+    color=DEFAULT_TEXT_COLOR,
+)
 
 
 def style_at_rect(page_text: dict[str, Any], rect: fitz.Rect) -> TextStyle:
@@ -30,13 +38,11 @@ def style_at_rect(page_text: dict[str, Any], rect: fitz.Rect) -> TextStyle:
                     best_span = span
 
     if not best_span:
-        # говно
-        return TextStyle(font="helv", font_size=11.0, color=(0.0, 0.0, 0.0))
+        return DEFAULT_TEXT_STYLE
 
     return TextStyle(
-        font=str(best_span.get("font") or "helv"),
-        font_size=float(best_span.get("size") or 11.0),
-        color=_color_from_int(int(best_span.get("color") or 0)),
+        font_size=float(best_span.get("size") or DEFAULT_TEXT_STYLE.font_size),
+        color=_color_from_int(int(best_span.get("color") or DEFAULT_TEXT_COLOR_VALUE)),
     )
 
 # изменить
@@ -53,31 +59,56 @@ def placeholder_target_rect(
     ограничиваем rect по x1 самого marker'а (текст рядом не перекрываем).
     Иначе растягиваем до правого края страницы и вниз до следующей строки.
     """
-    line_height = max(font_size * LINE_HEIGHT_FACTOR, marker_rect.height)
-    same_line_rect = _find_same_line(page_text, marker_rect)
+    line_height = _replacement_line_height(marker_rect, font_size)
+    top = marker_rect.y0
 
-    if same_line_rect and same_line_rect.x1 > marker_rect.x1 + font_size:
+    if _has_text_after_marker(page_text, marker_rect, min_gap=font_size):
         # Есть текст справа — не выходим за правую границу marker'а
         return fitz.Rect(
             marker_rect.x0,
-            marker_rect.y0,
+            top,
             marker_rect.x1,
-            marker_rect.y0 + line_height,
+            top + line_height,
         )
-
-    next_y = _next_line_top(page_text, marker_rect)
-    bottom = min(
-        marker_rect.y0 + line_height * 4,
-        next_y - 1 if next_y is not None else float("inf"),
-        page.rect.y1 - DEFAULT_MARGIN,
-    )
 
     return fitz.Rect(
         marker_rect.x0,
-        marker_rect.y0,
-        page.rect.x1 - DEFAULT_MARGIN,
-        bottom,
+        top,
+        page.rect.x1 - PAGE_MARGIN_PT,
+        _replacement_bottom(page, page_text, marker_rect, line_height),
     )
+
+
+def _replacement_line_height(marker_rect: fitz.Rect, font_size: float) -> float:
+    return max(font_size * LINE_HEIGHT_FACTOR, marker_rect.height)
+
+
+def _has_text_after_marker(
+    page_text: dict[str, Any],
+    marker_rect: fitz.Rect,
+    *,
+    min_gap: float,
+) -> bool:
+    same_line_rect = _find_same_line(page_text, marker_rect)
+    return same_line_rect is not None and same_line_rect.x1 > marker_rect.x1 + min_gap
+
+
+def _replacement_bottom(
+    page: fitz.Page,
+    page_text: dict[str, Any],
+    marker_rect: fitz.Rect,
+    line_height: float,
+) -> float:
+    candidates = [
+        marker_rect.y0 + line_height * MAX_INSERT_LINES,
+        page.rect.y1 - PAGE_MARGIN_PT,
+    ]
+
+    next_y = _next_line_top(page_text, marker_rect)
+    if next_y is not None:
+        candidates.append(next_y - 1)
+
+    return max(marker_rect.y0 + line_height, min(candidates))
 
 
 def _find_same_line(page_text: dict[str, Any], rect: fitz.Rect) -> fitz.Rect | None:

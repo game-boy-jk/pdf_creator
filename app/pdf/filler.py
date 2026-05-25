@@ -16,7 +16,7 @@ from app.pdf.layout import (
 
 PLACEHOLDER_RE = re.compile(r"{{\s*([a-zA-Z0-9_.-]+)\s*}}")
 
-FontLoader = Callable[[], bytes | None]
+FontLoader = Callable[[], bytes]
 
 
 class PdfFillError(Exception):
@@ -97,7 +97,7 @@ def _collect_replacements(
                     erase_rect=erase_rect,
                     insert_rect=placeholder_target_rect(page, page_layout, erase_rect, style.font_size),
                     style=style,
-                    font_path=resolve_font_path(style.font, fallback_font),
+                    font_path=resolve_font_path(fallback_font),
                 ))
 
     _validate(data, found_keys, missing_keys, has_placeholders, result)

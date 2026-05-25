@@ -2,16 +2,15 @@ import tempfile
 from collections.abc import Callable
 from threading import Lock
 
-import fitz
+FontLoader = Callable[[], bytes]
 
-FontLoader = Callable[[], bytes | None]
+FALLBACK_FONT_CACHE_KEY = "fallback"
 
 _font_path_cache: dict[str, str] = {}
 _cache_lock = Lock()
 
 
 def resolve_font_path(
-    font_name: str,
     fallback_loader: FontLoader,
 ) -> str:
     """
@@ -19,17 +18,17 @@ def resolve_font_path(
     Кешируется на уровне процесса — один шрифт скачивается один раз.
     """
     with _cache_lock:
-        if font_name in _font_path_cache:
-            return _font_path_cache[font_name]
+        if FALLBACK_FONT_CACHE_KEY in _font_path_cache:
+            return _font_path_cache[FALLBACK_FONT_CACHE_KEY]
 
     font_bytes = fallback_loader()
     if not font_bytes:
-        raise RuntimeError(f"Font not found in storage: {font_name}")
+        raise RuntimeError("Fallback font is empty")
 
     path = _write_temp_font(font_bytes)
 
     with _cache_lock:
-        _font_path_cache[font_name] = path
+        _font_path_cache[FALLBACK_FONT_CACHE_KEY] = path
 
     return path
 

@@ -38,10 +38,12 @@ def get_settings() -> Settings:
 
 def _env(name: str, default: str | None = None) -> str:
     """Без default — обязательный параметр. С default — опциональный."""
-    val = os.getenv(name) or default
+    val = os.getenv(name)
+    if val is None:
+        val = default
     if val is None:
         raise RuntimeError(f"Missing required config: {name}")
-    return str(val)
+    return val
 
 
 def _bool(val: str) -> bool:
